@@ -29,6 +29,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 """Module containing neighbourhood processing utilities."""
+import math
 
 import iris
 from iris.exceptions import CoordinateNotFoundError
@@ -37,6 +38,36 @@ import scipy.ndimage.filters
 
 from improver.ensemble_calibration.ensemble_calibration_utilities import (
     concatenate_cubes)
+
+
+def adjust_nsize_for_ens(ens_factor, num_ens, width_in_km):
+    """
+    Adjust neighbourhood size according to ensemble size
+
+    Parameters
+    ----------
+    ens_factor : float
+        Defined Factor with which to adjust the neighbour size
+        If ens_factor = 1.0 this essentially conservers ensemble
+        members if every grid square is considered to be the
+        equivalent of an ensemble member.
+    num_ens : float
+        Number of realizations / ensemble members
+    width_in_km : float
+        radius or width appropriate for a single forecast in km
+
+    Returns
+    -------
+    new_width : float
+        new neighbourhood radius (km)
+
+    """
+    if num_ens <= 1.0:
+        new_width = width_in_km
+    else:
+        new_width = (ens_factor *
+                     math.sqrt((width_in_km**2.0)/num_ens))
+    return new_width
 
 
 class BasicNeighbourhoodProcessing(object):
@@ -58,7 +89,8 @@ class BasicNeighbourhoodProcessing(object):
     # Max extent of kernel in grid cells.
     MAX_KERNEL_CELL_RADIUS = 500
 
-    def __init__(self, radii_in_km, lead_times=None, unweighted_mode=False):
+    def __init__(self, radii_in_km, lead_times=None, unweighted_mode=False,
+                 ens_factor=1.0):
         """
         Create a neighbourhood processing plugin that applies a smoothing
         kernel to points in a cube.
@@ -79,6 +111,9 @@ class BasicNeighbourhoodProcessing(object):
             If True, use a circle with constant weighting.
             If False, use a circle for neighbourhood kernel with
             weighting decreasing with radius.
+        ens_factor : float
+            The factor with which to multiple the adjustment to the
+            radii_in_km for more than one ensemble member.
 
         """
         if isinstance(radii_in_km, list):
@@ -93,6 +128,7 @@ class BasicNeighbourhoodProcessing(object):
                        "Unable to continue due to mismatch.")
                 raise ValueError(msg)
         self.unweighted_mode = bool(unweighted_mode)
+        self.ens_factor = float(ens_factor)
 
     def __str__(self):
         result = ('<NeighbourhoodProcessing: radii_in_km: {};' +
@@ -151,6 +187,43 @@ class BasicNeighbourhoodProcessing(object):
                        "the forecast_period.".format(cube))
                 raise CoordinateNotFoundError(msg)
         return required_lead_times
+
+    def _find_radii(self, num_ens, required_lead_times=None):
+        """
+        Find the required radii
+
+        If required_lead_times is None just adjust for ensemble
+        members if necessary.
+        Otherwise interpolate to find radius at each required
+        lead time and adjust for ensemble members if necessary
+
+        Parameters
+        ----------
+        num_ens : float
+            Number of ensemble members / realizations
+        required_lead_times : np.array or None
+            Array of required forecast times from cube
+
+        Returns
+        -------
+        radii : float of np.array of float
+            Required neighbourhood size/s
+        """
+        if required_lead_times is None:
+            radii = adjust_nsize_for_ens(self.ens_factor,
+                                         num_ens,
+                                         self.radii_in_km)
+        else:
+            # Interpolate to find the radius at each required lead time.
+            radii = (
+                np.interp(
+                    required_lead_times, self.lead_times, self.radii_in_km))
+            for i, val in enumerate(radii):
+                radii[i] = adjust_nsize_for_ens(self.ens_factor,
+                                                num_ens,
+                                                val)
+        print '########',radii
+        return radii
 
     def _get_grid_x_y_kernel_ranges(self, cube, radius_in_km):
         """
@@ -286,23 +359,24 @@ class BasicNeighbourhoodProcessing(object):
         try:
             realiz_coord = cube.coord('realization')
         except iris.exceptions.CoordinateNotFoundError:
-            pass
+            num_ens = 1.0
         else:
-            if len(realiz_coord.points) > 1:
-                raise ValueError("Does not operate across realizations.")
+            num_ens = len(realiz_coord.points)
+
         if np.isnan(cube.data).any():
             raise ValueError("Error: NaN detected in input cube data")
 
         if self.lead_times is None:
-            radii_in_km = self.radii_in_km
+            radii_in_km = self._find_radii(num_ens)
             ranges = self._get_grid_x_y_kernel_ranges(cube, radii_in_km)
             cube = self._apply_kernel_for_smoothing(cube, ranges)
         else:
             required_lead_times = self._find_required_lead_times(cube)
-            # Interpolate to find the radius at each required lead time.
+
             required_radii_in_km = (
-                np.interp(
-                    required_lead_times, self.lead_times, self.radii_in_km))
+                self._find_radii(num_ens,
+                                 required_lead_times=required_lead_times))
+
             cubes = iris.cube.CubeList([])
             # Find the number of grid cells required for creating the kernel,
             # and then apply the kernel to smooth the field.
@@ -311,7 +385,7 @@ class BasicNeighbourhoodProcessing(object):
                 ranges = self._get_grid_x_y_kernel_ranges(
                     cube_slice, radius_in_km)
                 cube_slice = (
-                        self._apply_kernel_for_smoothing(cube_slice, ranges))
+                    self._apply_kernel_for_smoothing(cube_slice, ranges))
                 cube_slice = iris.util.new_axis(cube_slice, "time")
                 cubes.append(cube_slice)
             cube = concatenate_cubes(cubes)

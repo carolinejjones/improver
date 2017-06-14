@@ -167,6 +167,28 @@ def set_up_cube_lat_long(zero_point_indices=((0, 7, 7),), num_time_points=1,
     return cube
 
 
+def add_realizations(cube, num):
+    """ Create num realizations of input cube.
+        Args:
+            cube : iris.cube.Cube
+                   Input cube.
+            num : integer
+                  Number of realizations.
+        Returns:
+            cubeout : iris.cube.Cube
+                      Copy of cube with num realizations added.
+    """
+    cubelist = iris.cube.CubeList()
+    for i in range(0, num):
+        newcube = cube.copy()
+        new_ensemble_coord = iris.coords.AuxCoord(i,
+                                                  standard_name='realization')
+        newcube.add_aux_coord(new_ensemble_coord)
+        cubelist.append(newcube)
+    cubeout = cubelist.merge_cube()
+    return cubeout
+
+
 class Test__init__(IrisTest):
 
     def test_radii_varying_with_lead_time_mismatch(self):
@@ -290,6 +312,32 @@ class Test__find_required_lead_times(IrisTest):
         msg = "The forecast period coordinate is not available"
         with self.assertRaisesRegexp(CoordinateNotFoundError, msg):
             plugin._find_required_lead_times(cube)
+
+class Test__find_radii(IrisTest):
+    """Test the adjustment to radii"""
+
+    RADIUS_IN_KM = 6.1
+
+    def test_no_num_ens_no_required_lead_times(self):
+        """Test radii when num_ens=1.0 and required_lead_times is None"""
+        expected_result = 6.1
+        num_ens = 1.0
+        cube = set_up_cube()
+        print cube
+        plugin = NBHood(self.RADIUS_IN_KM)
+        result = plugin._find_radii(num_ens)
+        print result
+        self.assertAlmostEquals(result, expected_result)
+
+    def test_ens_factor_set(self):
+        """Test radii when num_ens=1.0 and required_lead_times is None"""
+        expected_result = 6.1
+        num_ens = 1.0
+        cube = set_up_cube()
+        plugin = NBHood(self.RADIUS_IN_KM, ens_factor=2.0)
+        result = plugin._find_radii(num_ens)
+        print result
+        self.assertArrayAlmostEqual(result, expected_result)
 
 
 class Test__get_grid_x_y_kernel_ranges(IrisTest):
@@ -657,43 +705,40 @@ class Test_process(IrisTest):
         with self.assertRaisesRegexp(ValueError, msg):
             NBHood(self.RADIUS_IN_KM).process(cube)
 
-    def test_fail_multiple_realisations(self):
+    def test_multiple_realisations(self):
         """Test failing when the array has a realisation dimension."""
-        data = np.ones((14, 1, 16, 16))
-        data[0][0][7][7] = 0.0
+        cube = set_up_cube(
+            zero_point_indices=((0, 7, 7), (1, 7, 7,), (2, 7, 7)),
+            num_time_points=3)
+        cube = add_realizations(cube, 1)
+        print cube.data.shape
+        expected = np.ones([3,1,16,16])
+        expected[0, 0, 6:9, 6:9] = (
+            [0.91666667, 0.875, 0.91666667],
+            [0.875, 0.83333333, 0.875],
+            [0.91666667, 0.875, 0.91666667])
 
-        cube = Cube(data, standard_name="precipitation_amount",
-                    units="kg m^-2 s^-1")
-        num_grid_points = 16
-        coord_system = OSGB()
-        scaled_y_coord = OSGBGRID.coord('projection_y_coordinate')
-        cube.add_dim_coord(
-            DimCoord(
-                scaled_y_coord.points[:num_grid_points],
-                'projection_y_coordinate',
-                units='m', coord_system=coord_system
-            ),
-            2
-        )
-        scaled_x_coord = OSGBGRID.coord('projection_x_coordinate')
-        cube.add_dim_coord(
-            DimCoord(
-                scaled_x_coord.points[:num_grid_points],
-                'projection_x_coordinate',
-                units='m', coord_system=coord_system
-            ),
-            3
-        )
-        time_origin = "hours since 1970-01-01 00:00:00"
-        calendar = "gregorian"
-        tunit = Unit(time_origin, calendar)
-        cube.add_aux_coord(AuxCoord([402192.5],
-                                    "time", units=tunit), 1)
-        cube.add_aux_coord(AuxCoord(np.array(range(14)),
-                                    standard_name="realization"), 0)
-        msg = "Does not operate across realizations"
-        with self.assertRaisesRegexp(ValueError, msg):
-            NBHood(self.RADIUS_IN_KM).process(cube)
+        expected[1, 0, 5:10, 5:10] = SINGLE_POINT_RANGE_3_CENTROID
+
+        expected[2, 0, 4:11, 4:11] = (
+            [1, 0.9925, 0.985, 0.9825, 0.985, 0.9925, 1],
+            [0.9925, 0.98, 0.9725, 0.97, 0.9725, 0.98, 0.9925],
+            [0.985, 0.9725, 0.965, 0.9625, 0.965, 0.9725, 0.985],
+            [0.9825, 0.97, 0.9625, 0.96, 0.9625, 0.97, 0.9825],
+            [0.985, 0.9725, 0.965, 0.9625, 0.965, 0.9725, 0.985],
+            [0.9925, 0.98, 0.9725, 0.97, 0.9725, 0.98, 0.9925],
+            [1, 0.9925, 0.985, 0.9825, 0.985, 0.9925, 1])
+
+        iris.util.promote_aux_coord_to_dim_coord(cube, "time")
+        time_points = cube.coord("time").points
+        fp_points = [2, 3, 4]
+        cube = add_forecast_reference_time_and_forecast_period(
+            cube, time_point=time_points, fp_point=fp_points)
+        radii_in_km = [6, 8, 10]
+        lead_times = [2, 3, 4]
+        plugin = NBHood(radii_in_km, lead_times)
+        result = plugin.process(cube)
+        self.assertArrayAlmostEqual(result.data, expected)
 
     def test_radii_varying_with_lead_time(self):
         """
