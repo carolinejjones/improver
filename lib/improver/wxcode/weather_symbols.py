@@ -58,7 +58,12 @@ class WeatherSymbols(object):
         for the difficulty of float comparisons.
         """
         self.queries = wxcode_decision_tree()
+        self.start_node = 'heavy_precipitation'
         self.float_tolerance = 0.01
+        # Construct graph nodes dictionary
+        self.graph = {key: [self.queries[key]['succeed'],
+                            self.queries[key]['fail']]
+                      for key in self.queries.keys()}
 
     def __repr__(self):
         """Represent the configured plugin instance as a string."""
@@ -352,6 +357,94 @@ class WeatherSymbols(object):
         return routes
 
     @staticmethod
+    def find_all_positive_routes(graph, start, level=0, route=None,
+                                 print_tree=True):
+        """
+        Function to trace all positive routes through the decision tree.
+
+        Args:
+            graph (dict):
+                A dictionary that describes each node in the tree,
+                e.g. {<node_name>: [<succeed_name>, <fail_name>]}
+            start (string):
+                The node name of the tree root (currently always
+                heavy_precipitation).
+            level (int):
+                The level within the tree. Default = 0
+            route (list):
+                A list of node names found so far.
+            print_tree (boolean):
+                Print the tree. Default = True
+
+        Returns:
+            routes (list):
+                A list of node names that defines the route from
+                the tree root to the weather symbol leaf (end of chain)
+                of a successful chain.
+
+        """
+        if route is None:
+            route = []
+        success_val = graph[start][0]
+        route.extend([start])
+        level += 1
+        if print_tree:
+            tree_str = '\t'*level + 'succeed -> ' + str(success_val)
+            print tree_str
+        if not(isinstance(success_val, int)):
+            WeatherSymbols.find_all_positive_routes(graph, success_val,
+                                                    level=level,
+                                                    route=route)
+        return route
+
+    @staticmethod
+    def find_all_negative_routes(graph, level=0, route=None):
+        """
+        Function to trace all negative routes (+ positive) through the
+        decision tree.
+        Used within print_tree
+
+        Args:
+            graph (dict):
+                A dictionary that describes each node in the tree,
+                e.g. {<node_name>: [<succeed_name>, <fail_name>]}
+            level (int):
+                The level within the tree. Default = 0
+            route (list):
+                A list of node names found so far following a positive route.
+
+        """
+        if route is None:
+            route = []
+        for i in range(0, len(route)):
+            failkey = route.pop()
+
+            if failkey is not None:
+                failval = graph[failkey][1]
+                tree_str = '\t'*level + 'fail -> ' + str(failval)
+                print tree_str
+                if not(isinstance(failval, int)):
+                    newroute = (
+                        WeatherSymbols.find_all_positive_routes(graph, failval,
+                                                                level=level))
+                    if len(newroute) != 0:
+                        WeatherSymbols.find_all_negative_routes(
+                            graph,
+                            level=level+len(newroute),
+                            route=newroute)
+            level -= 1
+
+    def print_tree(self):
+        """
+        Print the decision tree
+        """
+        print self.start_node
+        route = self.find_all_positive_routes(self.graph, self.start_node)
+        self.find_all_negative_routes(self.graph,
+                                      level=len(route),
+                                      route=route)
+
+    @staticmethod
     def create_symbol_cube(cube):
         """
         Create an empty weather_symbol cube initialised with -1 across the
@@ -392,10 +485,6 @@ class WeatherSymbols(object):
         # Check input cubes contain required data
         self.check_input_cubes(cubes)
 
-        # Construct graph nodes dictionary
-        graph = {key: [self.queries[key]['succeed'], self.queries[key]['fail']]
-                 for key in self.queries.keys()}
-
         # Search through tree for all leaves (weather code end points)
         defined_symbols = []
         for item in self.queries.itervalues():
@@ -410,7 +499,7 @@ class WeatherSymbols(object):
         for symbol_code in defined_symbols:
             # In current decision tree
             # start node is heavy_precipitation
-            routes = self.find_all_routes(graph, 'heavy_precipitation',
+            routes = self.find_all_routes(self.graph, self.start_node,
                                           symbol_code)
 
             # Loop over possible routes from root to leaf
