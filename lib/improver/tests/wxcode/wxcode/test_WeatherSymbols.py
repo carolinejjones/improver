@@ -31,6 +31,8 @@
 """Unit tests for Weather Symbols class."""
 
 import unittest
+import sys
+from StringIO import StringIO
 
 import numpy as np
 
@@ -422,6 +424,104 @@ class Test_find_all_routes(IrisTest):
                            1]]
         self.assertIsInstance(result, list)
         self.assertListEqual(result, expected_nodes)
+
+
+class Test_find_positive_routes(IrisTest):
+
+    """Test the find_all_routes method ."""
+
+    def setUp(self):
+        """ Setup testing graph """
+        self.test_graph = {'start_node': ['success_1', 'fail_0'],
+                           'success_1': ['success_1_1', 'fail_1_0'],
+                           'fail_0': ['success_0_1', 3],
+                           'success_1_1': [1, 2],
+                           'fail_1_0': [2, 4],
+                           'success_0_1': [5, 1]}
+
+    def test_basic(self):
+        """Test find_positive_routes returns a list of expected nodes."""
+        plugin = WeatherSymbols()
+        result = plugin.find_positive_routes(self.test_graph,
+                                             'start_node',
+                                              print_tree=False)
+        expected_nodes = ['start_node',
+                          'success_1',
+                          'success_1_1']
+        self.assertIsInstance(result, list)
+        self.assertListEqual(result, expected_nodes)
+
+    def test_diff_starting_node(self):
+        """Test find_positive_routes returns expected nodes
+        if starting from new node."""
+        plugin = WeatherSymbols()
+        result = plugin.find_positive_routes(self.test_graph,
+                                             'fail_0',
+                                              print_tree=False)
+        expected_nodes = ['fail_0',
+                          'success_0_1']
+        self.assertIsInstance(result, list)
+        self.assertListEqual(result, expected_nodes)
+
+
+class Test_find_negative_routes(IrisTest):
+
+    """Test the find_all_routes method ."""
+
+    def setUp(self):
+        """ Setup testing graph """
+        self.output = StringIO()
+        self.saved_stdout = sys.stdout
+        sys.stdout = self.output
+        self.test_graph = {'start_node': ['success_1', 'fail_0'],
+                           'success_1': ['success_1_1', 'fail_1_0'],
+                           'fail_0': ['success_0_1', 3],
+                           'success_1_1': [1, 2],
+                           'fail_1_0': [2, 4],
+                           'success_0_1': [5, 1]}
+
+    def tearDown(self):
+        self.output.close()
+        sys.stdout = self.saved_stdout
+
+    def test_basic(self):
+        """Test find_positive_routes returns a list of expected nodes."""
+        plugin = WeatherSymbols()
+        route = ['start_node',
+                 'success_1',
+                 'success_1_1']
+        plugin.find_negative_routes(self.test_graph,
+                                    level=3,
+                                    route=route)
+        expected_str="fail -> 2"
+        self.assertTrue(expected_str in self.output.getvalue())
+
+
+class Test_print_tree(IrisTest):
+
+    """Test the find_all_routes method ."""
+
+    def setUp(self):
+        """ Setup testing graph """
+        self.output = StringIO()
+        self.saved_stdout = sys.stdout
+        sys.stdout = self.output
+        self.test_graph = {'start_node': ['success_1', 'fail_0'],
+                           'success_1': ['success_1_1', 'fail_1_0'],
+                           'fail_0': ['success_0_1', 3],
+                           'success_1_1': [1, 2],
+                           'fail_1_0': [2, 4],
+                           'success_0_1': [5, 1]}
+
+    def tearDown(self):
+        self.output.close()
+        sys.stdout = self.saved_stdout
+
+    def test_basic(self):
+        """Test print_tree."""
+        plugin = WeatherSymbols()
+        plugin.print_tree()
+        self.assertTrue(plugin.start_node in self.output.getvalue())
 
 
 class Test_create_symbol_cube(IrisTest):

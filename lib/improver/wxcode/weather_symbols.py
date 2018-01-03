@@ -357,10 +357,10 @@ class WeatherSymbols(object):
         return routes
 
     @staticmethod
-    def find_all_positive_routes(graph, start, level=0, route=None,
-                                 print_tree=True):
+    def find_positive_routes(graph, start, level=0, route=None,
+                             print_tree=True):
         """
-        Function to trace all positive routes through the decision tree.
+        Function to trace positive routes through the decision tree.
 
         Args:
             graph (dict):
@@ -392,13 +392,14 @@ class WeatherSymbols(object):
             tree_str = '\t'*level + 'succeed -> ' + str(success_val)
             print tree_str
         if not(isinstance(success_val, int)):
-            WeatherSymbols.find_all_positive_routes(graph, success_val,
-                                                    level=level,
-                                                    route=route)
+            WeatherSymbols.find_positive_routes(graph, success_val,
+                                                level=level,
+                                                route=route,
+                                                print_tree=print_tree)
         return route
 
     @staticmethod
-    def find_all_negative_routes(graph, level=0, route=None):
+    def find_negative_routes(graph, level=0, route=None, print_tree=True):
         """
         Function to trace all negative routes (+ positive) through the
         decision tree.
@@ -412,6 +413,8 @@ class WeatherSymbols(object):
                 The level within the tree. Default = 0
             route (list):
                 A list of node names found so far following a positive route.
+            print_tree (boolean):
+                Print the tree. Default = True
 
         """
         if route is None:
@@ -421,17 +424,20 @@ class WeatherSymbols(object):
 
             if failkey is not None:
                 failval = graph[failkey][1]
-                tree_str = '\t'*level + 'fail -> ' + str(failval)
-                print tree_str
+                if print_tree:
+                    tree_str = '\t'*level + 'fail -> ' + str(failval)
+                    print tree_str
                 if not(isinstance(failval, int)):
                     newroute = (
-                        WeatherSymbols.find_all_positive_routes(graph, failval,
-                                                                level=level))
+                        WeatherSymbols.find_positive_routes(graph, failval,
+                                                            level=level,
+                                                            print_tree=print_tree))
                     if len(newroute) != 0:
-                        WeatherSymbols.find_all_negative_routes(
+                        WeatherSymbols.find_negative_routes(
                             graph,
                             level=level+len(newroute),
-                            route=newroute)
+                            route=newroute,
+                            print_tree=print_tree)
             level -= 1
 
     def print_tree(self):
@@ -439,10 +445,10 @@ class WeatherSymbols(object):
         Print the decision tree
         """
         print self.start_node
-        route = self.find_all_positive_routes(self.graph, self.start_node)
-        self.find_all_negative_routes(self.graph,
-                                      level=len(route),
-                                      route=route)
+        route = self.find_positive_routes(self.graph, self.start_node)
+        self.find_negative_routes(self.graph,
+                                  level=len(route),
+                                  route=route)
 
     @staticmethod
     def create_symbol_cube(cube):
