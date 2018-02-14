@@ -229,7 +229,7 @@ class SquareNeighbourhood(object):
             new_cube.add_aux_coord(coord_y)
         return new_cube
 
-    def pad_cube_with_halo(self, cube, width_x, width_y):
+    def pad_cube_with_halo(self, cube, width_x, width_y, masked_data=False):
         """
         Method to pad a halo around the data in an iris cube. The padding
         calculates the mean within the neighbourhood radius in grid cells
@@ -243,6 +243,8 @@ class SquareNeighbourhood(object):
                 The width in x and y directions of the neighbourhood radius in
                 grid cells. This will be the width of padding to be added to
                 the numpy array.
+            masked_data (bool):
+                True if using masked data
 
         Returns:
             iris.cube.Cube:
@@ -258,10 +260,17 @@ class SquareNeighbourhood(object):
             # Pad a halo around the original data with the extent of the halo
             # given by width_y and width_x. Assumption to pad using the mean
             # value within the neighbourhood width.
-            padded_data = np.pad(
-                slice_2d.data,
-                ((2*width_y, 2*width_y), (2*width_x, 2*width_x)),
-                "mean", stat_length=((width_y, width_y), (width_x, width_x)))
+            if masked_data:
+                padded_data = np.pad(
+                    slice_2d.data,
+                    ((2*width_y, 2*width_y), (2*width_x, 2*width_x)),
+                    "constant", constant_values=(0.0, 0.0))
+            else:
+                padded_data = np.pad(
+                    slice_2d.data,
+                    ((2*width_y, 2*width_y), (2*width_x, 2*width_x)),
+                    "mean",
+                    stat_length=((width_y, width_y), (width_x, width_x)))
             coord_x = cube.coord(axis='x')
             padded_x_coord = (
                 SquareNeighbourhood.pad_coord(coord_x, width_x, 'add'))
@@ -494,13 +503,14 @@ class SquareNeighbourhood(object):
                 or both the input cube and a mask cube.
         """
         neighbourhood_averaged_cubes = iris.cube.CubeList([])
+        masked_data = len(cubes_to_sum) > 1
         for cube_to_process in cubes_to_sum:
             # Pad the iris cube. This way, the edge effects produced
             # by the vectorisation of the 4-point method will appear outside
             # our domain of interest. These unwanted points can be trimmed off
             # later.
             cube_to_process = self.pad_cube_with_halo(
-                cube_to_process, grid_cells_x, grid_cells_y)
+                cube_to_process, grid_cells_x, grid_cells_y, masked_data)
             summed_up_cube, nan_masks = self.cumulate_array(
                 cube_to_process)
             neighbourhood_averaged_cubes.append(
