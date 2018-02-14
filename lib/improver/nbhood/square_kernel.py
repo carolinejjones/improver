@@ -119,7 +119,7 @@ class SquareNeighbourhood(object):
         cubelist = iris.cube.CubeList([])
         nan_masks = []
         for slice_2d in cube.slices([yname, xname]):
-            data = slice_2d.data
+            data = slice_2d.data.astype(np.longdouble)
             nan_mask = np.isnan(data)
             data[nan_mask] = 0
             data_summed_along_y = np.cumsum(data, axis=0)
