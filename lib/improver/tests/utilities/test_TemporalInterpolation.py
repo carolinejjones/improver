@@ -148,6 +148,58 @@ class Test_construct_time_list(IrisTest):
                 self.time_0, self.time_1)
 
 
+class Test_solar_interpolation(IrisTest):
+
+    """Test solar interpolation."""
+
+    def setUp(self):
+        """Set up the test inputs."""
+        self.time_0 = datetime.datetime(2017, 11, 1, 3)
+        self.time_mid = datetime.datetime(2017, 11, 1, 6)
+        self.time_1 = datetime.datetime(2017, 11, 1, 9)
+        self.npoints = 10
+        data_time_0 = np.ones((self.npoints, self.npoints), dtype=np.float32)
+        data_time_1 = np.ones((self.npoints, self.npoints),
+                              dtype=np.float32) * 7
+        cube_time_0 = set_up_variable_cube(data_time_0,
+                                           time=self.time_0,
+                                            frt=self.time_0)
+        cube_time_1 = set_up_variable_cube(data_time_1,
+                                           time=self.time_1,
+                                           frt=self.time_0)
+        cubes = iris.cube.CubeList([cube_time_0, cube_time_1])
+        self.cube = cubes.merge_cube()
+        self.time_list=[('time',[self.time_mid])]
+        print(self.cube)
+        print(self.time_list)
+
+    def test_return_type(self):
+        """Test that an iris cubelist is returned."""
+
+        plugin = TemporalInterpolation(interpolation_method='solar',
+                                       times=[self.time_mid])
+        result = plugin.solar_interpolate(self.cube,self.time_list)
+        self.assertIsInstance(result, iris.cube.CubeList)
+
+    def test_valid_single_interpolation(self):
+        """Test interpolating to the mid point of the time range. Expect the
+        data to be half way between, and the time coordinate should be at
+        06Z November 11th 2017."""
+
+        expected_data = np.ones((self.npoints, self.npoints)) * 4
+        expected_time = (self.time_0 + timedelta(hours=3)).timestamp()
+        expected_fp = 3 * 3600
+        plugin = TemporalInterpolation(interpolation_method='solar',
+                                       times=[self.time_mid])
+        result, = plugin.solar_interpolate(self.cube,self.time_list)
+        print(result)
+        print(result.data)
+        self.assertArrayAlmostEqual(expected_data, result.data)
+        self.assertArrayAlmostEqual(result.coord('time').points, expected_time)
+        self.assertAlmostEqual(result.coord('forecast_period').points[0],
+                               expected_fp)
+
+
 class Test_process(IrisTest):
 
     """Test interpolation of cubes to intermediate times using the plugin."""

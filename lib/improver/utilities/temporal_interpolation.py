@@ -170,16 +170,23 @@ class TemporalInterpolation(object):
         # coords so need to revert back
         dtype_time = cube.coord('time').points.dtype
         dtype_fp = cube.coord('forecast_period').points.dtype
+        print(dtype_time)
 
         interpolated_cube = (
             cube.interpolate(time_list, iris.analysis.Linear()))
         interpolated_cubes = iris.cube.CubeList()
         daynightplugin = DayNightMask()
         daynight_mask = daynightplugin.process(interpolated_cube)
+        print(daynight_mask.data)
 
         for i, single_time in enumerate(interpolated_cube.slices_over('time')):
             index = np.where(daynight_mask.data[i] == daynightplugin.night)
-            single_time.data[::, index[0], index[1]] = 0.0
+            print(index)
+            print(single_time.shape)
+            if len(single_time.shape) > 2:
+                single_time.data[::, index[0], index[1]] = 0.0
+            else:
+                single_time.data[index[0], index[1]] = 0.0
             coord_time = single_time.coord('time')
             coord_time.points = np.around(coord_time.points).astype(dtype_time)
             coord_fp = single_time.coord('forecast_period')
