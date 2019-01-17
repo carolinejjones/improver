@@ -39,13 +39,13 @@ usage: improver-temporal-interpolate [-h] [--profile]
                                      [--interpolation_method INTERPOLATION_METHOD]
                                      --output_files OUTPUT_FILES
                                      [OUTPUT_FILES ...]
-                                     DATA_T0 DATA_T1
+                                     INFILES INFILES
 
 Interpolate data between validity times
 
 positional arguments:
-  DATA_T0               Cube contain the data at the beginning of the period
-  DATA_T1               Cube contain the data at the end of the period
+  INFILES               Files contain the data at the beginning and end of the
+                        period (2 files required)
 
 optional arguments:
   -h, --help            show this help message and exit
