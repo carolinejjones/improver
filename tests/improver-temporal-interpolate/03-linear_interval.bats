@@ -31,15 +31,16 @@
 
 . $IMPROVER_DIR/tests/lib/utils
 
-@test "temporal-interpolate t0 t3 --times t1 --output_files out_t1" {
+@test "temporal-interpolate t0 t3 --interval_in_mins=60 --output_files out1 out2" {
   improver_check_skip_acceptance
   KGO="temporal-interpolate/basic/kgo_t1.nc"
-  # Run temporal-interpolation for a time and check the result.
+  KGO2="temporal-interpolate/basic/kgo_t2.nc"
+  # Run temporal-interpolation with interval_in_mins option and check the result.
   run improver temporal-interpolate \
       "$IMPROVER_ACC_TEST_DIR/temporal-interpolate/basic/20190116T0900Z-PT0033H00M-temperature_at_screen_level.nc" \
       "$IMPROVER_ACC_TEST_DIR/temporal-interpolate/basic/20190116T1200Z-PT0036H00M-temperature_at_screen_level.nc" \
-      --times 20190116T1000Z \
-      --output_files "$TEST_DIR/output_t1.nc"
+      --interval_in_mins=60 \
+      --output_files "$TEST_DIR/output_t1.nc" "$TEST_DIR/output_t2.nc"
   [[ "$status" -eq 0 ]]
 
   improver_check_recreate_kgo "output.nc" $KGO
@@ -47,4 +48,6 @@
   # Run nccmp to compare the output and kgo.
   improver_compare_output "$TEST_DIR/output_t1.nc" \
       "$IMPROVER_ACC_TEST_DIR/$KGO"
+  improver_compare_output "$TEST_DIR/output_t2.nc" \
+      "$IMPROVER_ACC_TEST_DIR/$KGO2"
 }

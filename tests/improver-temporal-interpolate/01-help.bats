@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # -----------------------------------------------------------------------------
-# (C) British Crown Copyright 2017-2018 Met Office.
+# (C) British Crown Copyright 2017-2019 Met Office.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,8 +35,10 @@
   read -d '' expected <<'__HELP__' || true
 usage: improver-temporal-interpolate [-h] [--profile]
                                      [--profile_file PROFILE_FILE]
-                                     [--interval_in_mins INTERVAL_IN_MINS]
-                                     [--output_files OUTPUT_FILES [OUTPUT_FILES ...]]
+                                     (--interval_in_mins INTERVAL_IN_MINS | --times TIMES [TIMES ...])
+                                     [--interpolation_method INTERPOLATION_METHOD]
+                                     --output_files OUTPUT_FILES
+                                     [OUTPUT_FILES ...]
                                      DATA_T0 DATA_T1
 
 Interpolate data between validity times
@@ -54,7 +56,17 @@ optional arguments:
                         Specifies the interval in minutes at which to
                         interpolate between the two input cubes. A number of
                         minutes which does not divide up the interval equally
-                        will raise an exception.
+                        will raise an exception. If intervals_in_mins is set
+                        then times can not be set.
+  --times TIMES [TIMES ...]
+                        Specifies the times in the format {YYYYMMDD}T{HHMM}Z
+                        at which to interpolate between the two input
+                        cubes.Where {YYYYMMDD} is year, month day and {HHMM}
+                        is hour and minutes e.g 20180116T0100Z. More than one
+                        timecan be provided separated by a space but if times
+                        are set interval_in_mins can not be set
+  --interpolation_method INTERPOLATION_METHOD
+                        Specifies the interpolation method. Default is linear.
   --output_files OUTPUT_FILES [OUTPUT_FILES ...]
                         List of output files.
 __HELP__

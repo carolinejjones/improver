@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # -----------------------------------------------------------------------------
-# (C) British Crown Copyright 2017-2018 Met Office.
+# (C) British Crown Copyright 2017-2019 Met Office.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,10 +35,12 @@
   read -d '' expected <<'__TEXT__' || true
 usage: improver-temporal-interpolate [-h] [--profile]
                                      [--profile_file PROFILE_FILE]
-                                     [--interval_in_mins INTERVAL_IN_MINS]
-                                     [--output_files OUTPUT_FILES [OUTPUT_FILES ...]]
+                                     (--interval_in_mins INTERVAL_IN_MINS | --times TIMES [TIMES ...])
+                                     [--interpolation_method INTERPOLATION_METHOD]
+                                     --output_files OUTPUT_FILES
+                                     [OUTPUT_FILES ...]
                                      DATA_T0 DATA_T1
-improver-temporal-interpolate: error: the following arguments are required: DATA_T0, DATA_T1
+improver-temporal-interpolate: error: the following arguments are required: DATA_T0, DATA_T1, --output_files
 __TEXT__
   [[ "$output" =~ "$expected" ]]
 }
